@@ -29,12 +29,12 @@ class RoverInterface():
         self.str_pwm.set_period(50)
         self.str_pwm.enable()
 
-        self.thr_pwm = navio.pwm.PWM(2)
-        self.thr_pwm.initialize()
-        self.thr_pwm.set_period(50)
-        self.thr_pwm.enable()
+        #self.thr_pwm = navio.pwm.PWM(2)
+        #self.thr_pwm.initialize()
+        #self.thr_pwm.set_period(50)
+        #self.thr_pwm.enable()
 
-        self.led = navio.leds.Led()
+        #self.led = navio.leds.Led()
 
         self.max_str_angle = rospy.get_param('max_str_angle',0.5)
         self.max_thr = rospy.get_param('max_thr_cmd',0.2)
@@ -48,8 +48,9 @@ class RoverInterface():
 
         #self.str_trim = rospy.get_param('str_trim',)
         self.max_speed = rospy.get_param('max_speed',2)
-
+        self.spd_cmd_pub = rospy.Publisher('/commands/motor/speed',Float64,queue_size=10)
         self.acker_sub = rospy.Subscriber('acker_cmd',AckermannDriveStamped,self.ackerCallBack)
+
         self.joy_sub = rospy.Subscriber('/joy',Joy,self.joyCallBack)
 
         # self.vesc_spd_pub = rospy.Publisher()
@@ -81,7 +82,7 @@ class RoverInterface():
             self.auto_mode = True
             rospy.loginfo("Auto Mode Enable")
 
-        self.thr_cmd = msg.axes[1]
+        self.spd_cmd = self.max_speed*msg.axes[1]
         self.str_cmd = msg.axes[3]
 
 
@@ -92,12 +93,12 @@ class RoverInterface():
         str_cmd = 0
         #rospy.loginfo("%f",(rospy.get_time()-self.time_out))
 
-        if(self.armed):
-            self.led.setColor('Green')
-        elif(self.armed and self.auto):
-            self.led.setColor('Yellow')
-        else:
-            self.led.setColor('Red')
+        #if(self.armed):
+        #    self.led.setColor('Green')
+        #elif(self.armed and self.auto):
+        #    self.led.setColor('Yellow')
+        #else:
+        #    self.led.setColor('Red')
 
         if(self.auto_mode):
             if((rospy.get_time()-self.time_out) < 0.3):
@@ -105,7 +106,7 @@ class RoverInterface():
             else:
                 spd_cmd = 0
         else:
-            thr_cmd = self.thr_cmd
+            spd_cmd = self.spd_cmd
 
         str_cmd = self.str_cmd*0.4 + 1.500
         #str_cmd = 0.200*math.sin(rospy.get_time()) + 1.500
@@ -113,13 +114,18 @@ class RoverInterface():
         self.str_pwm.set_duty_cycle(str_cmd)
 
         if(self.armed):
+            mot_cmd = Float64()
+            mot_cmd.data = 3092.53*spd_cmd
             # Change here to publish to VESC control topic (PWM or speed if PWM is not compatible)
-            self.thr_pwm.set_duty_cycle(thr_cmd)
-        elif(self.armed and self.auto):
+            print(mot_cmd)
+            self.spd_cmd_pub.publish(mot_cmd)
+            ##self.thr_pwm.set_duty_cycle(thr_cmd)
             # ADD CODE HERE TO PUBLISH TO VESC SPEED CONTROL TOPIC
         else:
+            mot_cmd = Float64()
+            self.spd_cmd_pub.publish(mot_cmd)
             # change here to publish a speed of zero to the vesc speed topic
-            self.thr_pwm.set_duty_cycle(1.5)
+            #self.thr_pwm.set_duty_cycle(1.5)
 
 
 
