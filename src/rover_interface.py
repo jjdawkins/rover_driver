@@ -6,13 +6,18 @@ import time
 import navio.pwm
 import navio.util
 import navio.leds
-
+import RPi.GPIO as GPIO
 import math
 import numpy as np
 
 from ackermann_msgs.msg import *
 from std_msgs.msg import Empty, String, Header, Float64
 from sensor_msgs.msg import Joy
+
+ledPin = 17
+servoPin = 18
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(servoPin,GPIO.OUT)
 
 STR_PWM_CH = 0
 THR_PWM_CH = 2
@@ -24,11 +29,12 @@ class RoverInterface():
 
     def __init__(self):
 
-        self.str_pwm = navio.pwm.PWM(0)
-        self.str_pwm.initialize()
-        self.str_pwm.set_period(50)
-        self.str_pwm.enable()
-
+        #self.str_pwm = navio.pwm.PWM(0)
+        #self.str_pwm.initialize()
+        #self.str_pwm.set_period(50)
+        #self.str_pwm.enable()
+        self.str_pwm = GPIO.PWM(servoPin,50)
+        self.str_pwm.start(7.5)
         #self.thr_pwm = navio.pwm.PWM(2)
         #self.thr_pwm.initialize()
         #self.thr_pwm.set_period(50)
@@ -36,8 +42,8 @@ class RoverInterface():
 
         #self.led = navio.leds.Led()
 
-        self.max_str_angle = rospy.get_param('max_str_angle',0.5)
-        self.max_thr = rospy.get_param('max_thr_cmd',0.2)
+        self.max_str_angle = rospy.get_param('~max_str_angle',0.5)
+        self.max_thr = rospy.get_param('~max_thr_cmd',0.2)
         #self.min_thr = rospy.get_param('min_thr_cmd',-0.2)
         self.time_out = 0
         self.auto_mode = False
@@ -47,14 +53,12 @@ class RoverInterface():
         self.spd_cmd = 0
 
         #self.str_trim = rospy.get_param('str_trim',)
-        self.max_speed = rospy.get_param('max_speed',2)
+        self.max_speed = rospy.get_param('~max_speed',2)
         self.spd_cmd_pub = rospy.Publisher('/commands/motor/speed',Float64,queue_size=10)
         self.acker_sub = rospy.Subscriber('acker_cmd',AckermannDriveStamped,self.ackerCallBack)
 
         self.joy_sub = rospy.Subscriber('/joy',Joy,self.joyCallBack)
 
-        # self.vesc_spd_pub = rospy.Publisher()
-        # self.vesc_pwm_pub = rospy.Publisher()
 
     def ackerCallBack(self,msg):
         rospy.loginfo("acker_Callback")
@@ -108,10 +112,10 @@ class RoverInterface():
         else:
             spd_cmd = self.spd_cmd
 
-        str_cmd = self.str_cmd*0.4 + 1.500
-        #str_cmd = 0.200*math.sin(rospy.get_time()) + 1.500
+        str_cmd = self.str_cmd*2.5 + 7
+        #str_cmd = 0.200*math.sn(rospy.get_time()) + 1.500
         #print("Str_PWM: %f, Thr_PWM: %f",str_cmd,thr_cmd)
-        self.str_pwm.set_duty_cycle(str_cmd)
+        self.str_pwm.ChangeDutyCycle(str_cmd)
 
         if(self.armed):
             mot_cmd = Float64()
