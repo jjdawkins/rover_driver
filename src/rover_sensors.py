@@ -1,19 +1,20 @@
 #! /usr/bin/env python3
 
-import time
 import rospy
+import time
+
 import sys
 import time
 import math
 import numpy as np
 import spidev
+import tf
 
 import argparse
 import sys
 import navio.mpu9250
 import navio.util
-
-import RPi.GPIO as GPIO
+from ahrs.filters import Madgwick
 
 from std_msgs.msg import Float32, Float32MultiArray
 from sensor_msgs.msg import Imu
@@ -23,71 +24,62 @@ navio.util.check_apm()
 class roverSensors():
     def __init__(self):
 
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.add_event_detect(18, GPIO.FALLING, callback=self.wheelTickCallBack, bouncetime=2)
-        self.str_pub = rospy.Publisher("odometry",Float32MultiArray,queue_size=10)
-        self.spd_pub = rospy.Publisher("wheel_spd",Float32,queue_size=10)
-        #self.imu_sub = rospy.Subscriber("/mavros/imu/data",Imu,self.imuCallBack)
-        #self.rc_sub = rospy.Subscriber("/mavros/rc/in",RCIn,self.rcCallBack)
-        self.wheel_speed = 0
+        self.imu = navio.mpu9250.MPU9250()
+        if self.imu.testConnection():
+            print("Connection established: True")
+        else:
+            sys.exit("Connection established: False")
+
+        self.imu.initialize()
+
+        self.imu_pub = rospy.Publisher("imu",Imu,queue_size=10)
         self.time_out = rospy.get_time()
         self.wheel_timer = rospy.get_time()
-        self.dt=100
-        self.ax = 0
-        self.ay = 0
-        self.gz = 0
-        self.rc_str = 0
-        self.rc_thr = 0
-        self.send_timer = rospy.Timer(rospy.Duration(0.04), self.sendCallBack)
+        self.dt = 0
+        self.time = rospy.get_time()
+        self.old_time = rospy.get_time()
+
+        self.madgwick = Madgwick()
+        self.quat = np.zeros((1, 4))      # Allocation of quaternions
+        self.quat = [1.0, 0.0, 0.0, 0.0]
 
 
-    def rcCallBack(self,msg):
-        self.rc_str = msg.channels[0]
-        self.rc_thr = msg.channels[1]
-
-    def imuCallBack(self,msg):
-        self.ax = msg.linear_acceleration.x
-        self.ay = msg.linear_acceleration.y
-        self.gz = msg.angular_velocity.z
-
-    def wheelTickCallBack(self,channel):
-        self.dt = rospy.get_time()-self.wheel_timer
-        print(" in Ts %f",1/self.dt)
-        self.wheel_timer=rospy.get_time()
-
-    def sendCallBack(self,msg):
-        str_msg = Float32MultiArray()
-
-        if(rospy.get_time()-self.wheel_timer > 0.2):
-            self.wheel_speed = 0
-        else:
-            curr_ws = 1/self.dt
-            if(curr_ws<200):
-                self.wheel_speed = curr_ws
-            else:
-                self.wheel_speed = self.wheel_speed
+        self.send_timer = rospy.Timer(rospy.Duration(0.02), self.mainLoop)
 
 
-        #str_msg.data.append(self.rc_str)
-        #str_msg.data.append(self.vl53.range)
-        #str_msg.data.append(self.rc_str)
-        #str_msg.data.append(self.wheel_speed)
-        #str_msg.data.append(self.ax)
-        #str_msg.data.append(self.ay)
-        #str_msg.data.append(self.gz)
+    def mainLoop(self,msg):
+        accel_data, gyro_data, mag_data = self.imu.getMotion9()
+        self.time = rospy.get_time()
+        self.dt = self.time - self.old_time
 
-        #print("Range: {0}mm".format(vl53.range))
-        #str_cmd = self.str_ang + 1.500
-        spd_msg = Float32()
-        spd_msg.data = self.wheel_speed
-        self.spd_pub.publish(spd_msg)
-        #self.str_pub.publish(str_msg)
+        self.madgwick.Dt = self.dt
+        self.quat = self.madgwick.updateMARG(self.quat, gyr=gyro_data, acc=accel_data,mag=mag_data)
+        q = (self.quat[1],self.quat[2],self.quat[3],self.quat[0])
+        euler = tf.transformations.euler_from_quaternion(q)
+
+
+        imu_msg = Imu()
+        imu_msg.linear_acceleration.x = accel_data[0]
+        imu_msg.linear_acceleration.y = accel_data[1]
+        imu_msg.linear_acceleration.z = accel_data[2]
+
+        imu_msg.angular_velocity.x = gyro_data[0]
+        imu_msg.angular_velocity.y = gyro_data[1]
+        imu_msg.angular_velocity.z = gyro_data[2]
+
+        imu_msg.orientation.w = self.quat[0]
+        imu_msg.orientation.x = self.quat[1]
+        imu_msg.orientation.y = self.quat[2]
+        imu_msg.orientation.z = self.quat[3]
+
+        self.imu_pub.publish(imu_msg)
+        print(euler)
+        self.old_time = self.time
 
 
 if __name__ == '__main__':
     rospy.init_node('rover_sensors_node')
 
-    myOdom = roverSensors()
+    mySensors = roverSensors()
 
     rospy.spin()
