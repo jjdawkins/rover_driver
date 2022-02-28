@@ -1,18 +1,24 @@
 #! /usr/bin/env python3
 
 import time
-
 import rospy
 import sys
 import time
-
 import math
 import numpy as np
+import spidev
+
+import argparse
+import sys
+import navio.mpu9250
+import navio.util
+
 import RPi.GPIO as GPIO
 
 from std_msgs.msg import Float32, Float32MultiArray
 from sensor_msgs.msg import Imu
 
+navio.util.check_apm()
 
 class roverSensors():
     def __init__(self):
