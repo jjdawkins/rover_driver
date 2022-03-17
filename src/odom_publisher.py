@@ -7,7 +7,7 @@ import tf2_ros
 import tf_conversions
 
 
-from std_msgs.msg import Float32, Float64, Bool
+from std_msgs.msg import Float32, Float64, Bool, Empty
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, TransformStamped
 from ackermann_msgs.msg import AckermannDriveStamped
@@ -21,24 +21,33 @@ class ODOM_Interface:
         self.x = 0.0
         self.y = 0.0
         self.yaw = 0.0
-        self.yawRate = 0.0
+        self.roll_rate = 0.0
+        self.pitch_rate = 0.0
+        self.yaw_rate = 0.0
         self.dt = 0.05
         self.quat = (0,0,0,1)
         self.speed = 0.0
+        self.encoder_constant=rospy.get_param('~encoder_constant',3092.53)
 
 
         self.qtm_sub = rospy.Subscriber("/sensors/core",VescStateStamped,self.speedCallback) # TODO: potentially modify
         self.imu_sub = rospy.Subscriber("imu",Imu,self.IMUCallback) # TODO: specify which topic the IMU is on
-
+        self.reset_sub = rospy.Subscriber("odom_reset",Empty,self.resetCallBack)
         self.odom_broadcaster = tf2_ros.TransformBroadcaster()
         self.odom_pub = rospy.Publisher('odom',Odometry,queue_size=1)
 
         self.odom_timer = rospy.Timer(rospy.Duration(self.dt),self.odomTFCallback)
 
 
+    def resetCallBack(self,msg):
+        self.x = 0.0
+        self.y = 0.0
+        self.yaw = 0.0
+        self.speed = 0.0
+        self.yaw_rate = 0.0
 
     def speedCallback(self,msg):
-        self.speed = msg.speed # v=omega*r, r=0.05 wheel radius
+        self.speed = msg.state.speed/self.encoder_constant # v=omega*r, r=0.05 wheel radius
         #speed = Float64()
         #speed.data = speedavg*0.05 # v=omega*r, r=0.05 wheel radius
 
@@ -46,7 +55,9 @@ class ODOM_Interface:
         # self.speed_pub.publish(speed)
 
     def IMUCallback(self,msg):
-        self.yawRate = msg.angular_velocity.z
+        self.roll_rate = msg.angular_velocity.x
+        self.pitch_rate =msg.angular_velocity.y
+        self.yaw_rate = msg.angular_velocity.z
         oriQuat = msg.orientation
         self.quat = (oriQuat.x, oriQuat.y, oriQuat.z, oriQuat.w)
         roll, pitch, yaw = tf_conversions.transformations.euler_from_quaternion(self.quat)
@@ -80,11 +91,14 @@ class ODOM_Interface:
         Od.pose.pose.orientation.z = self.quat[2]
         Od.pose.pose.orientation.w = self.quat[3]
         Od.twist.twist.linear.x = self.speed
-        Od.twist.twist.angular.z = self.yawRate
+        Od.twist.twist.angular.x = self.roll_rate
+        Od.twist.twist.angular.y = self.pitch_rate
+        Od.twist.twist.angular.z = self.yaw_rate
         self.odom_pub.publish(Od)
+        print(Od)
 
 
-        print("sent odom")
+#        print("sent odom")
 
 if __name__ == '__main__':
     rospy.init_node('Odom_publisher')

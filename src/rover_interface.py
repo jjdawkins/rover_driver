@@ -19,8 +19,9 @@ from sensor_msgs.msg import Joy
 from rover_driver.msg import status
 from rover_driver.srv import setArm, setMode
 
-red = (255,0,0)
 white =(255,255,255)
+red = (255,0,0)
+orange = (255,128,0)
 yellow = (255,255,0)
 green = (0,255,0)
 blue = (0,0,255)
@@ -42,7 +43,8 @@ class RoverInterface():
 
         self.max_str_angle = rospy.get_param('~max_str_angle',0.5)
         self.max_thr = rospy.get_param('~max_thr_cmd',0.2)
-        self.encoder_constant = rospy.get_param('~encoder_constant',3000)
+        self.encoder_constant = rospy.get_param('~encoder_constant',3092.53)
+        self.color = rospy.get_param('~color_code',green)
         #self.min_thr = rospy.get_param('min_thr_cmd',-0.2)
         self.time_out = 0
         self.auto_mode = False
@@ -113,7 +115,11 @@ class RoverInterface():
             self.auto_mode = True
             rospy.loginfo("Auto Mode Enable")
 
-        self.spd_cmd = self.max_speed*msg.axes[1]
+        if(msg.buttons[5]):
+            self.spd_cmd = 2*self.max_speed*msg.axes[1]
+        else:
+            self.spd_cmd = self.max_speed*msg.axes[1]
+
         self.str_cmd = msg.axes[3]
 
     def statusUpdate(self,event):
@@ -121,7 +127,7 @@ class RoverInterface():
 
         stat_msg.armed = self.armed
         if(self.armed):
-            self.led_color = green
+            self.led_color = self.color
 
         else:
             self.led_color = red
@@ -179,7 +185,7 @@ class RoverInterface():
 
         if(self.armed):
             mot_cmd_msg = Float64()
-            mot_cmd_msg.data = 3092.53*self.spd_cmd_filt
+            mot_cmd_msg.data = self.encoder_constant*self.spd_cmd_filt
             # Change here to publish to VESC control topic (PWM or speed if PWM is not compatible)
             print(mot_cmd_msg)
             self.spd_cmd_pub.publish(mot_cmd_msg)
