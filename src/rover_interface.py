@@ -17,7 +17,7 @@ from ackermann_msgs.msg import *
 from std_msgs.msg import Empty, String, Header, Float64
 from sensor_msgs.msg import Joy
 from rover_driver.msg import status
-from rover_driver.srv import setArm, setMode
+from rover_driver.srv import setArm, setMode, setColor
 
 white =(255,255,255)
 red = (255,0,0)
@@ -68,6 +68,7 @@ class RoverInterface():
         self.acker_sub = rospy.Subscriber('acker_cmd',AckermannDriveStamped,self.ackerCallBack)
         self.arm_srv = rospy.Service('arm',setArm,self.armCallBack)
         self.mode_srv = rospy.Service('mode',setMode,self.modeCallBack)
+        self.color_srv = rospy.Service('color',setColor,self.colorCallBack)
 
 
         self.joy_sub = rospy.Subscriber('/joy',Joy,self.joyCallBack)
@@ -86,6 +87,10 @@ class RoverInterface():
     def modeCallBack(self,req):
         self.auto_mode = req.mode
         return self.auto_mode
+
+    def colorCallBack(self,req):
+        self.color = (req.r,req.g,req.b)
+        return True
 
 
     def ackerCallBack(self,msg):

@@ -57,6 +57,7 @@ find_package(catkin REQUIRED COMPONENTS
    FILES
    setMode.srv
    setArm.srv
+   setColor.srv
  )
 
 ## Generate actions in the 'action' folder

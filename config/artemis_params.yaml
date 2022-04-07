@@ -1,3 +1,5 @@
 max_str_angle: 1
 max_thr_cmd: 0.3
 min_thr_cmd: -0.3
+color_code: [255, 0, 255]
+encoder_constant: 3092.53
