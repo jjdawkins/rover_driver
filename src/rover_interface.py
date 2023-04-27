@@ -45,11 +45,12 @@ class RoverInterface():
         self.max_thr = rospy.get_param('~max_thr_cmd',0.2)
         self.encoder_constant = rospy.get_param('~encoder_constant',3092.53)
         self.color = rospy.get_param('~color_code',green)
+        self.str_trim = rospy.get_param('~str_trim',0.0)
         #self.min_thr = rospy.get_param('min_thr_cmd',-0.2)
         self.time_out = 0
         self.auto_mode = False
         self.armed = False
-        self.str_cmd = 0
+        self.str_cmd = 0        
         self.thr_cmd = 0
         self.spd_cmd = 0
         self.spd_cmd_filt = 0
@@ -174,23 +175,23 @@ class RoverInterface():
 
         str_cmd = self.str_cmd*0.5 + 0.5
         str_cmd_msg = Float64()
-        str_cmd_msg.data = str_cmd
+        str_cmd_msg.data = str_cmd + self.str_trim
         self.str_cmd_pub.publish(str_cmd_msg)
 
-        in_var = 0
-        if((spd_cmd - self.spd_cmd_filt) > self.ctrl_dt*20): # 40 meters/s^2 max accel
-            in_var = (1/self.filt_tau)*self.ctrl_dt*self.ctrl_dt*20
-        elif((spd_cmd - self.spd_cmd_filt) < -self.ctrl_dt*20): # 40 meters/s^2 max accel
-            in_var = -(1/self.filt_tau)*self.ctrl_dt*self.ctrl_dt*20
-        else:
-            in_var = (1/self.filt_tau)*self.ctrl_dt*spd_cmd
+#        in_var = 0
+#        if((spd_cmd - self.spd_cmd_filt) > self.ctrl_dt*20): # 40 meters/s^2 max accel
+#            in_var = (1/self.filt_tau)*self.ctrl_dt*self.ctrl_dt*20
+#        elif((spd_cmd - self.spd_cmd_filt) < -self.ctrl_dt*20): # 40 meters/s^2 max accel
+#            in_var = -(1/self.filt_tau)*self.ctrl_dt*self.ctrl_dt*20
+#        else:
+#            in_var = (1/self.filt_tau)*self.ctrl_dt*spd_cmd
 
 
-        self.spd_cmd_filt = (1 - (1/self.filt_tau)*self.ctrl_dt)*self.spd_cmd_filt + in_var
+#        self.spd_cmd_filt = (1 - (1/self.filt_tau)*self.ctrl_dt)*self.spd_cmd_filt + in_var
 
         if(self.armed):
             mot_cmd_msg = Float64()
-            mot_cmd_msg.data = self.encoder_constant*self.spd_cmd_filt
+            mot_cmd_msg.data = self.encoder_constant*self.spd_cmd
             # Change here to publish to VESC control topic (PWM or speed if PWM is not compatible)
             print(mot_cmd_msg)
             self.spd_cmd_pub.publish(mot_cmd_msg)

@@ -14,7 +14,8 @@ import argparse
 import sys
 import navio.mpu9250
 import navio.util
-from ahrs.filters import Madgwick
+from ahrs.filters import Madgwick, EKF
+from ahrs.common.orientation import acc2q 
 
 from std_msgs.msg import Float32
 from geometry_msgs.msg import Vector3Stamped
@@ -33,6 +34,7 @@ class roverSensors():
 
         self.imu.initialize()
 
+        self.mag_pub = rospy.Publisher("mag",Vector3Stamped,queue_size=10)
         self.imu_pub = rospy.Publisher("imu",Imu,queue_size=10)
         self.eul_pub = rospy.Publisher("euler",Vector3Stamped,queue_size=10)
         self.time_out = rospy.get_time()
@@ -41,7 +43,8 @@ class roverSensors():
         self.time = rospy.get_time()
         self.old_time = rospy.get_time()
 
-        self.madgwick = Madgwick()
+        #self.madgwick = Madgwick()
+        self.ekf = EKF(var_acc=0.05**2,var_gyro=0.002**2,var_mag=1.0**2,frame='ENU')
         #self.quat = np.zeros((1, 4))      # Allocation of quaternions
         self.quat = np.array([1.0, 0.0, 0.0, 0.0])
         self.accel = np.array([1,3])
@@ -59,13 +62,18 @@ class roverSensors():
 
         self.accel = np.array([accel_data[1],-accel_data[0],accel_data[2]])
         self.gyro = np.array([gyro_data[1],-gyro_data[0],gyro_data[2]])
+        #self.mag = np.array([mag_data[0],-mag_data[1],-mag_data[2]])
         self.mag = np.array([mag_data[1],-mag_data[0],mag_data[2]])
 
-        self.madgwick.Dt = self.dt
-        self.quat = self.madgwick.updateMARG(self.quat, gyr=self.gyro, acc=self.accel,mag=self.mag)
+
+        #self.madgwick.Dt = self.dt
+        self.ekf.Dt = self.dt
+        #self.quat = self.madgwick.updateMARG(self.quat, gyr=self.gyro, acc=self.accel,mag=self.mag)
+        self.quat = self.ekf.update(self.quat, gyr=self.gyro, acc=self.accel,mag=self.mag)
         q = (self.quat[1],self.quat[2],self.quat[3],self.quat[0])
         euler = tf.transformations.euler_from_quaternion(q)
 
+        print(self.mag)
         eul_msg = Vector3Stamped()
         eul_msg.header.frame_id = 'imu_link'
         eul_msg.header.stamp.secs= now.secs
@@ -94,6 +102,17 @@ class roverSensors():
         imu_msg.orientation.z = self.quat[3]
 
         self.imu_pub.publish(imu_msg)
+
+        mag_msg = Vector3Stamped()
+        mag_msg.header.frame_id ="imu_link"
+        mag_msg.header.stamp.secs= now.secs
+        mag_msg.header.stamp.nsecs = now.nsecs
+        mag_msg.vector.x = self.mag[0]
+        mag_msg.vector.y = self.mag[1]
+        mag_msg.vector.z = self.mag[2]
+
+        self.mag_pub.publish(mag_msg)
+
 
         self.old_time = self.time
 
